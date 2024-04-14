@@ -3,27 +3,29 @@ package crypto
 import (
 	"crypto/ed25519"
 	"crypto/rand"
+	"encoding/hex"
 	"io"
 	"log"
+
 )
 
-/*z
-	generate private key
-	get public key from private key using 
-	sign message with private key => signature
-	verify signature with public key generated from private key
+/*
+generate private key
+get public key from private key using
+sign message with private key => signature
+verify signature with public key generated from private key
 */
 
 const (
 	privKeyLen = 64
-	pubKeyLen = 32
-	seedLen = 32
+	pubKeyLen  = 32
+	seedLen    = 32
+	addressLen = 20
 )
 
 type PrivateKey struct {
 	key ed25519.PrivateKey
 }
-
 
 func GeneratePrivateKey() *PrivateKey {
 	seed := make([]byte, seedLen)
@@ -42,13 +44,17 @@ func (p *PrivateKey) Bytes() []byte {
 func (p *PrivateKey) Sign(msg []byte) *Signature {
 	return &Signature{
 		value: ed25519.Sign(p.key, msg),
-	} 
+	}
 }
 
-func (p *PrivateKey) PublicKey() *PublicKey{
+func (p *PrivateKey) PublicKey() *PublicKey {
 	b := make([]byte, pubKeyLen)
 	copy(b, p.key[32:])
-	return &PublicKey{key: b,}
+	return &PublicKey{key: b}
+}
+
+func (p *PrivateKey) String() string {
+	return hex.EncodeToString(p.Bytes())
 }
 
 type PublicKey struct {
@@ -59,8 +65,18 @@ func (p *PublicKey) Bytes() []byte {
 	return p.key
 }
 
+func (p *PublicKey) Address() *Address {
+	return &Address{
+		value: p.key[len(p.key) - addressLen:],
+	}
+}
+
+func (p *PublicKey) String() string {
+	return hex.EncodeToString(p.Bytes())
+}
+
 type Signature struct {
-	value []byte 
+	value []byte
 }
 
 func (s *Signature) Bytes() []byte {
@@ -69,4 +85,15 @@ func (s *Signature) Bytes() []byte {
 
 func (s *Signature) Verify(pubKey *PublicKey, msg []byte) bool {
 	return ed25519.Verify(pubKey.key, msg, s.value)
+}
+
+type Address struct {
+	value []byte
+}
+
+func (a *Address) Bytes() []byte {
+	return a.value
+}
+func (a *Address) String() string {
+    return hex.EncodeToString(a.Bytes())
 }
