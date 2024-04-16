@@ -27,36 +27,35 @@ func TestNewTransaction(t *testing.T) {
 	fromPubKey := fromPrivKey.PublicKey()
 	fromAddress := fromPrivKey.PublicKey().Address()
 
-
 	toPrivKey := crypto.GeneratePrivateKey()
 	toAddress := toPrivKey.PublicKey().Address()
 
 	input := &proto.TxInput{
-		PrevTxHash: util.RandomHash(),
+		PrevTxHash:   util.RandomHash(),
 		PrevOutIndex: 0,
-		PublicKey: fromPubKey.Bytes(),
+		PublicKey:    fromPubKey.Bytes(),
 	}
 
 	// sending all the balance assuming 100 tokens.
 
 	// amount to send to destination
 	output1 := &proto.TxOutput{
-		Amount: 5,
+		Amount:  5,
 		Address: toAddress.Bytes(),
 	}
 
 	// amount to send back to myself
 	output2 := &proto.TxOutput{
-		Amount: 95,
+		Amount:  95,
 		Address: fromAddress.Bytes(),
 	}
 
 	tx := &proto.Transaction{
 		Version: 1,
-		Inputs: []*proto.TxInput{input},
+		Inputs:  []*proto.TxInput{input},
 		Outputs: []*proto.TxOutput{output1, output2},
 	}
-	
+
 	// sign the transaction with the private key
 	sig := SignTransaction(fromPrivKey, tx)
 
