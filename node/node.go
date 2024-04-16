@@ -30,48 +30,11 @@ func NewNode() *Node {
 		peerLock: sync.RWMutex{},
 		peers:    make(map[proto.NodeClient]*proto.Version),
 		version:  "cock-blocker-0.1",
-		logger: lg.Sugar(),
+		logger:   lg.Sugar(),
 	}
 }
 
-func (n *Node) BootstrapNetwork(addrs []string) error {
-	for _, addr := range addrs {
-		c, err := makeNodeClient(addr)
-		if err != nil {
-			return err
-		}
-		v, err := c.Handshake(context.TODO(), n.getVersion())
-		if err != nil {
-			n.logger.Error("handshake error: ", err)
-			continue
-		}
-		n.addPeer(c, v)
-	}
-	return nil
-}
-
-func (n *Node) addPeer(c proto.NodeClient, v *proto.Version) {
-	n.peerLock.Lock()
-	defer n.peerLock.Unlock()
-	n.logger.Debugw("new peer connected", "addr", v.ListenAddr, "height", v.Height)
-	n.peers[c] = v
-}
-
-func (n *Node) removePeer(c proto.NodeClient) {
-	n.peerLock.Lock()
-	defer n.peerLock.Unlock()
-	delete(n.peers, c)
-}
-
-func (n *Node) getVersion() *proto.Version {
-	return &proto.Version{
-		Version:    "cock-blocker-0.1",
-		Height:     0,
-		ListenAddr: n.listenAddr,
-	}
-}
-
-func (n *Node) Start(listenAddr string) error {
+func (n *Node) Start(listenAddr string, bootstrapNodes []string) error {
 	n.listenAddr = listenAddr
 	var (
 		opts       = []grpc.ServerOption{}
@@ -84,12 +47,22 @@ func (n *Node) Start(listenAddr string) error {
 	}
 	proto.RegisterNodeServer(grpcServer, n)
 	n.logger.Infow("node started...", "port", n.listenAddr)
+
+	// bootstrap the network with list of known remote networks
+	if len(bootstrapNodes) > 0 {
+		go n.bootstrapNetwork(bootstrapNodes)
+	}
+
 	return grpcServer.Serve(ln)
 }
 
+/*
+Handshake only works when the node (grpc client) is doing an outbound connection to the other node (grpc server).
+The caller of the Handshake is the grpc client and the owner of version, v is the grpc server.
+This function returns the version of the version of the node (grpc client)
+This method establishes a connection and exchanges version information.
+*/
 func (n *Node) Handshake(ctx context.Context, v *proto.Version) (*proto.Version, error) {
-	// peer, _ := peer.FromContext(ctx)
-
 	c, err := makeNodeClient(v.ListenAddr)
 	if err != nil {
 		return nil, nil
@@ -111,4 +84,107 @@ func makeNodeClient(listenAddr string) (proto.NodeClient, error) {
 	}
 
 	return proto.NewNodeClient(c), err
+}
+
+// bootstrapNetwork initializes the network by connecting to the provided addresses and adding peers.
+//
+// Parameters:
+// - addrs: a slice of strings representing the addresses to connect to.
+// Returns an error if the connection or handshake fails.
+func (n *Node) bootstrapNetwork(addrs []string) error {
+	for _, addr := range addrs {
+		
+		if !n.canConnectionWith(addr) {
+			continue
+		}
+		
+		n.logger.Debugw("dialing remote peer", "we", n.listenAddr, "remote", addr)
+		c, v, err := n.dialRemoteNode(addr)
+		if err != nil {
+			return err
+		}
+		n.addPeer(c, v)
+	}
+	return nil
+}
+
+func (n *Node) canConnectionWith(addr string) bool {
+	if n.listenAddr == addr {
+		return false
+	}
+
+	connectedPeers := n.getPeerList()
+	for _, connectedAddr := range connectedPeers {
+		if addr == connectedAddr {
+			return false
+		}
+	}
+	return true
+}
+
+// addPeer adds the node A (grpc node client) to the peer list of node (grpc node server)
+// as well as its peer list from the version
+func (n *Node) addPeer(c proto.NodeClient, v *proto.Version) {
+	n.peerLock.Lock()
+	defer n.peerLock.Unlock()
+
+	// handle the logic to decide whether to accept/drop the incoming node connection
+	n.peers[c] = v
+	
+
+	// connect to all peers into the received lists of peers (remote nodes)
+	if len(v.PeerList) > 0 {
+		go n.bootstrapNetwork(v.PeerList)
+	}
+
+	n.logger.Debugw("new peer connected", "we", n.listenAddr, "addr", v.ListenAddr, "height", v.Height)
+
+}
+
+func (n *Node) removePeer(c proto.NodeClient) {
+	n.peerLock.Lock()
+	defer n.peerLock.Unlock()
+	delete(n.peers, c)
+}
+
+func (n *Node) getVersion() *proto.Version {
+	return &proto.Version{
+		Version:    "cock-blocker-0.1",
+		Height:     0,
+		ListenAddr: n.listenAddr,
+		PeerList:   n.getPeerList(),
+	}
+}
+
+// dialRemoteNode initiates a connection to a remote node using the provided address.
+//
+// Parameters:
+// - addr: the address of the remote node to connect to.
+// Returns:
+// - proto.NodeClient: the client connection to the remote node.
+// - *proto.Version: the version information received after a successful connection.
+// - error: an error if the connection or handshake fails.
+func (n *Node) dialRemoteNode(addr string) (proto.NodeClient, *proto.Version, error) {
+	c, err := makeNodeClient(addr)
+	if err != nil {
+		return nil, nil, err
+	}
+	v, err := c.Handshake(context.Background(), n.getVersion())
+	if err != nil {
+		return nil, nil, err
+	}
+	return c, v, nil
+}
+
+// getPeerList interates over the current peers of the node
+// and get their listen address (grpc client) through their version (version.ListenAddr)
+func (n *Node) getPeerList() []string {
+	n.peerLock.Lock()
+	defer n.peerLock.Unlock()
+
+	peers := []string{}
+	for _, version := range n.peers {
+		peers = append(peers, version.ListenAddr)
+	}
+	return peers
 }
