@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.con/vynious/cock-block/proto"
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/peer"
 )
@@ -16,14 +17,20 @@ type Node struct {
 	version    string
 	peerLock   sync.RWMutex
 	peers      map[proto.NodeClient]*proto.Version
+	logger     *zap.SugaredLogger
 	proto.UnimplementedNodeServer
 }
 
 func NewNode() *Node {
+	loggerConfig := zap.NewDevelopmentConfig()
+	loggerConfig.EncoderConfig.TimeKey = ""
+	lg, _ := loggerConfig.Build()
+
 	return &Node{
 		peerLock: sync.RWMutex{},
 		peers:    make(map[proto.NodeClient]*proto.Version),
 		version:  "cock-blocker-0.1",
+		logger: lg.Sugar(),
 	}
 }
 
@@ -35,10 +42,10 @@ func (n *Node) BootstrapNetwork(addrs []string) error {
 		}
 		v, err := c.Handshake(context.TODO(), n.getVersion())
 		if err != nil {
-			log.Println("handshake error: ", err)
+			n.logger.Error("handshake error: ", err)
 			continue
 		}
-		n.addPeer(c,v)
+		n.addPeer(c, v)
 	}
 	return nil
 }
@@ -46,7 +53,7 @@ func (n *Node) BootstrapNetwork(addrs []string) error {
 func (n *Node) addPeer(c proto.NodeClient, v *proto.Version) {
 	n.peerLock.Lock()
 	defer n.peerLock.Unlock()
-	log.Printf("[%s] new peer connected (%s) - height (%d)\n", n.listenAddr,v.ListenAddr, v.Height)
+	n.logger.Debugw("new peer connected", "addr", v.ListenAddr, "height", v.Height)
 	n.peers[c] = v
 }
 
@@ -66,13 +73,17 @@ func (n *Node) getVersion() *proto.Version {
 
 func (n *Node) Start(listenAddr string) error {
 	n.listenAddr = listenAddr
-	opts := []grpc.ServerOption{}
-	grpcServer := grpc.NewServer(opts...)
+	var (
+		opts       = []grpc.ServerOption{}
+		grpcServer = grpc.NewServer(opts...)
+	)
+
 	ln, err := net.Listen("tcp", listenAddr)
 	if err != nil {
 		return err
 	}
 	proto.RegisterNodeServer(grpcServer, n)
+	n.logger.Infow("node started...", "port", n.listenAddr)
 	return grpcServer.Serve(ln)
 }
 
