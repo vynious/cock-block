@@ -4,11 +4,22 @@ option go_package = "github.com/vynious/cock-blocker/proto";
 
 
 service Node {
-    rpc HandleTransaction(Transaction) returns (None);
+    // handshake for p2p discovery 
+
+    rpc Handshake(Version) returns (Version);
+    rpc HandleTransaction(Transaction) returns (Ack);
     
 }
 
-message None {}
+
+message Version {
+    string version = 1;
+    int32  height = 2;
+    string listenAddr = 3;
+
+}
+
+message Ack {}
 
 message Block {
     Header header = 1;

@@ -3,8 +3,6 @@ package main
 import (
 	"context"
 	"log"
-	"net"
-	"time"
 
 	"github.con/vynious/cock-block/node"
 	"github.con/vynious/cock-block/proto"
@@ -13,25 +11,21 @@ import (
 
 func main() {
 
-	node := node.NewNode()
-	opts := []grpc.ServerOption{
-	}
-	grpcServer := grpc.NewServer(opts...)
-	ln, err := net.Listen("tcp", ":3000")
-	if err != nil {
-		log.Fatal(err)
-	}
-	proto.RegisterNodeServer(grpcServer, node)
-	log.Println("node running on port: ", ":3000")
+	makeNode(":3000", []string{})
+	makeNode(":4000", []string{":3000"})
 
-	go func() {
-		for {
-			time.Sleep(2 * time.Second)
-			makeTransaction()
+	select {}
+}
+
+func makeNode(listenAddr string, bootstrapNodes []string) (*node.Node, error) {
+	n := node.NewNode()
+	go n.Start(listenAddr)
+	if len(bootstrapNodes) > 0 {
+		if err := n.BootstrapNetwork(bootstrapNodes); err != nil {
+			return nil, err
 		}
-	}()
-
-	grpcServer.Serve(ln)
+	}
+	return n, nil
 }
 
 func makeTransaction() {
@@ -40,7 +34,13 @@ func makeTransaction() {
 		log.Fatal(err)
 	}
 	c := proto.NewNodeClient(client)
-	if _, err = c.HandleTransaction(context.TODO(), &proto.Transaction{}); err != nil {
+
+	version := &proto.Version{
+		Version:    "cock-blocker-0.1",
+		Height:     1,
+		ListenAddr: ":",
+	}
+	if _, err = c.Handshake(context.TODO(), version); err != nil {
 		log.Fatal(err)
 	}
 }

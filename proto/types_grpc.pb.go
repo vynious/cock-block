@@ -22,7 +22,8 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type NodeClient interface {
-	HandleTransaction(ctx context.Context, in *Transaction, opts ...grpc.CallOption) (*None, error)
+	Handshake(ctx context.Context, in *Version, opts ...grpc.CallOption) (*Version, error)
+	HandleTransaction(ctx context.Context, in *Transaction, opts ...grpc.CallOption) (*Ack, error)
 }
 
 type nodeClient struct {
@@ -33,8 +34,17 @@ func NewNodeClient(cc grpc.ClientConnInterface) NodeClient {
 	return &nodeClient{cc}
 }
 
-func (c *nodeClient) HandleTransaction(ctx context.Context, in *Transaction, opts ...grpc.CallOption) (*None, error) {
-	out := new(None)
+func (c *nodeClient) Handshake(ctx context.Context, in *Version, opts ...grpc.CallOption) (*Version, error) {
+	out := new(Version)
+	err := c.cc.Invoke(ctx, "/Node/Handshake", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeClient) HandleTransaction(ctx context.Context, in *Transaction, opts ...grpc.CallOption) (*Ack, error) {
+	out := new(Ack)
 	err := c.cc.Invoke(ctx, "/Node/HandleTransaction", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -46,7 +56,8 @@ func (c *nodeClient) HandleTransaction(ctx context.Context, in *Transaction, opt
 // All implementations must embed UnimplementedNodeServer
 // for forward compatibility
 type NodeServer interface {
-	HandleTransaction(context.Context, *Transaction) (*None, error)
+	Handshake(context.Context, *Version) (*Version, error)
+	HandleTransaction(context.Context, *Transaction) (*Ack, error)
 	mustEmbedUnimplementedNodeServer()
 }
 
@@ -54,7 +65,10 @@ type NodeServer interface {
 type UnimplementedNodeServer struct {
 }
 
-func (UnimplementedNodeServer) HandleTransaction(context.Context, *Transaction) (*None, error) {
+func (UnimplementedNodeServer) Handshake(context.Context, *Version) (*Version, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Handshake not implemented")
+}
+func (UnimplementedNodeServer) HandleTransaction(context.Context, *Transaction) (*Ack, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method HandleTransaction not implemented")
 }
 func (UnimplementedNodeServer) mustEmbedUnimplementedNodeServer() {}
@@ -68,6 +82,24 @@ type UnsafeNodeServer interface {
 
 func RegisterNodeServer(s grpc.ServiceRegistrar, srv NodeServer) {
 	s.RegisterService(&Node_ServiceDesc, srv)
+}
+
+func _Node_Handshake_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Version)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServer).Handshake(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/Node/Handshake",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServer).Handshake(ctx, req.(*Version))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _Node_HandleTransaction_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -95,6 +127,10 @@ var Node_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "Node",
 	HandlerType: (*NodeServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "Handshake",
+			Handler:    _Node_Handshake_Handler,
+		},
 		{
 			MethodName: "HandleTransaction",
 			Handler:    _Node_HandleTransaction_Handler,
