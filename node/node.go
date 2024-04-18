@@ -126,6 +126,10 @@ func (n *Node) Handshake(ctx context.Context, v *proto.Version) (*proto.Version,
 	return n.getVersion(), nil
 }
 
+// HandleTransaction handles a transaction received by the Node.
+//
+// It takes a context.Context and a *proto.Transaction as parameters.
+// It returns a *proto.Ack and an error.
 func (n *Node) HandleTransaction(ctx context.Context, tx *proto.Transaction) (*proto.Ack, error) {
 	p, _ := peer.FromContext(ctx)
 	hash := hex.EncodeToString(types.HashTransaction(tx))
@@ -143,6 +147,14 @@ func (n *Node) HandleTransaction(ctx context.Context, tx *proto.Transaction) (*p
 	return &proto.Ack{}, nil
 }
 
+// validatorLoop is a method of the Node struct that runs in a loop to create new blocks at regular intervals.
+//
+// It logs the start of the validator loop with the public key of the node and the block time.
+// It creates a ticker that ticks at the specified block time.
+// It runs in an infinite loop and waits for the ticker to fire.
+// When the ticker fires, it logs the creation of a new block with the number of transactions in the mempool.
+// It iterates over the transactions in the mempool and deletes them from the mempool.
+// This loop continues indefinitely.
 func (n *Node) validatorLoop() {
 	n.logger.Infow("starting validator loop", "pubKey", n.PrivateKey.PublicKey(), "blockTime", blockTime)
 	ticker := time.NewTicker(blockTime)
@@ -157,6 +169,12 @@ func (n *Node) validatorLoop() {
 	}
 }
 
+// broadcast sends a message to all connected peers.
+//
+// Parameter:
+// - msg: the message to be broadcasted.
+// Return type:
+// - error: an error if the broadcast fails.
 func (n *Node) broadcast(msg any) error {
 	for peer := range n.peers {
 		switch v := msg.(type) {
