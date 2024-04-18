@@ -21,7 +21,8 @@ const (
 )
 
 type Mempool struct {
-	txx map[string]*proto.Transaction
+	lock sync.RWMutex
+	txx  map[string]*proto.Transaction
 }
 
 func NewMempool() *Mempool {
@@ -32,16 +33,49 @@ func NewMempool() *Mempool {
 
 // Has checks if the mempool has the transaction inside
 func (pool *Mempool) Has(tx *proto.Transaction) bool {
+	pool.lock.RLock()
+	defer pool.lock.RUnlock()
+
 	hash := hex.EncodeToString(types.HashTransaction(tx))
 	_, ok := pool.txx[hash]
 	return ok
 }
 
+// Clear clears the mempool and returns a slice of all transactions that were removed.
+//
+// It locks the mempool for writing, iterates over all transactions in the mempool,
+// deletes each transaction from the mempool, and adds it to the returned slice.
+// Finally, it unlocks the mempool and returns the slice of removed transactions.
+//
+// Returns:
+// - []*proto.Transaction: a slice of all transactions that were removed from the mempool.
+func (pool *Mempool) Clear() []*proto.Transaction {
+	pool.lock.Lock()
+	defer pool.lock.Unlock()
+
+	txx := make([]*proto.Transaction, len(pool.txx)) 
+	it := 0
+	for k, v := range pool.txx {
+		delete(pool.txx, k)
+		txx[it] = v
+		it++
+	}
+	return txx
+}
+
+func (pool *Mempool) Len() int {
+	pool.lock.RLock()
+	defer pool.lock.RUnlock()
+	return len(pool.txx)
+}
 func (pool *Mempool) Add(tx *proto.Transaction) bool {
 
 	if pool.Has(tx) {
 		return false
 	}
+
+	pool.lock.Lock()
+	defer pool.lock.Unlock()
 
 	hash := hex.EncodeToString(types.HashTransaction(tx))
 	pool.txx[hash] = tx
@@ -160,12 +194,8 @@ func (n *Node) validatorLoop() {
 	ticker := time.NewTicker(blockTime)
 	for {
 		<-ticker.C
-		n.logger.Debugw("time to create a new block", "lenTx", len(n.mempool.txx))
-
-		for hash, _ := range n.mempool.txx {
-			delete(n.mempool.txx, hash)
-		}
-
+		txx := n.mempool.Clear()
+		n.logger.Debugw("time to create a new block", "lenTx", len(txx))
 	}
 }
 
