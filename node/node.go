@@ -34,6 +34,14 @@ func NewNode() *Node {
 	}
 }
 
+// Start starts the Node server on the specified listen address and bootstraps the network with the provided list of bootstrap nodes.
+//
+// Parameters:
+// - listenAddr: the address to listen on for incoming connections.
+// - bootstrapNodes: a list of addresses of remote nodes to bootstrap the network connection.
+//
+// Returns:
+// - error: an error if the server fails to start or bootstrap the network.
 func (n *Node) Start(listenAddr string, bootstrapNodes []string) error {
 	n.listenAddr = listenAddr
 	var (
@@ -94,7 +102,7 @@ func makeNodeClient(listenAddr string) (proto.NodeClient, error) {
 func (n *Node) bootstrapNetwork(addrs []string) error {
 	for _, addr := range addrs {
 		
-		if !n.canConnectionWith(addr) {
+		if !n.canConnectWith(addr) {
 			continue
 		}
 		
@@ -108,7 +116,10 @@ func (n *Node) bootstrapNetwork(addrs []string) error {
 	return nil
 }
 
-func (n *Node) canConnectionWith(addr string) bool {
+
+// canConnectWith checks if the address of the remote node is already connected with 
+// or if it is the same as the current address
+func (n *Node) canConnectWith(addr string) bool {
 	if n.listenAddr == addr {
 		return false
 	}

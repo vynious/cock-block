@@ -11,15 +11,19 @@ import (
 
 // HashBlock returns a SHA256 of the header.
 func HashBlock(block *proto.Block) []byte {
-	b, err := pb.Marshal(block)
-	if err != nil {
-		log.Panic(err)
-	}
-	hash := sha256.Sum256(b)
-	return hash[:]
+	return HashHeader(block.Header)
 }
 
 
 func SignBlock(pk *crypto.PrivateKey, b *proto.Block) *crypto.Signature {
 	return pk.Sign(HashBlock(b))
+}
+
+func HashHeader(header *proto.Header) []byte{ 
+	h, err := pb.Marshal(header)
+	if err != nil {
+		log.Panic(err)
+	}
+	hash := sha256.Sum256(h)
+	return hash[:]
 }
