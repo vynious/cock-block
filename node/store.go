@@ -9,6 +9,43 @@ import (
 	"github.con/vynious/cock-block/types"
 )
 
+type TxStorer interface {
+	Put(*proto.Transaction) error
+	Get(string) (*proto.Transaction, error)
+}
+
+
+type MemoryTxStore struct {
+	lock sync.RWMutex
+	txx map[string]*proto.Transaction
+}
+
+func NewMemoryTxStore() *MemoryTxStore {
+	return &MemoryTxStore {
+		txx: make(map[string]*proto.Transaction),
+	}
+}
+
+func (s *MemoryTxStore) Put(tx *proto.Transaction) error {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	hash := hex.EncodeToString((types.HashTransaction(tx)))
+	s.txx[hash] = tx
+	return nil
+}
+
+func (s *MemoryTxStore) Get(hash string) (*proto.Transaction, error) {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
+	tx, ok := s.txx[hash]
+	if !ok {
+		return nil, fmt.Errorf("cannot find tx with hash %s",hash)
+	}
+	return tx, nil
+}
+
+
+
 type BlockStorer interface {
 	Put(*proto.Block) error
 	Get(string) (*proto.Block, error)

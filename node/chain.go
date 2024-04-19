@@ -11,6 +11,8 @@ import (
 	"github.con/vynious/cock-block/types"
 )
 
+const godSeed = "6383f76035b74ae6d1e4ea0570dad175c01f84a101927e4803028b03200201c1"
+
 // HeaderList stores a list of the hashed headers inside the Block Store
 type HeaderList struct {
 	headers []*proto.Header
@@ -43,11 +45,12 @@ func (list *HeaderList) Len() int {
 }
 
 type Chain struct {
+	txStore    TxStorer
 	blockStore BlockStorer
 	headers    *HeaderList
 }
 
-// NewChain creates a new Chain object with the given BlockStorer. 
+// NewChain creates a new Chain object with the given BlockStorer.
 // First block will be the genesis block
 //
 // Parameters:
@@ -55,9 +58,10 @@ type Chain struct {
 //
 // Returns:
 // - *Chain: a pointer to the newly created Chain object.
-func NewChain(bs BlockStorer) *Chain {
+func NewChain(bs BlockStorer, txStore TxStorer) *Chain {
 	chain := &Chain{
 		blockStore: bs,
+		txStore:    txStore,
 		headers:    NewHeaderList(),
 	}
 	chain.addBlock(createGenesisBlock())
@@ -112,7 +116,7 @@ func (c *Chain) ValidateBlock(b *proto.Block) error {
 	if !types.VerifyBlock(b) {
 		return fmt.Errorf("invalid block signature")
 	}
-	
+
 	currentBlock, err := c.GetBlockByHeight(c.Height())
 	if err != nil {
 		return err
@@ -133,19 +137,37 @@ func (c *Chain) ValidateBlock(b *proto.Block) error {
 // Returns:
 // - *proto.Block: The generated genesis block.
 func createGenesisBlock() *proto.Block {
-	privKey := crypto.GeneratePrivateKey()
+	privKey := crypto.GenerateNewPrivateKeyFromSeedStr(godSeed)
 	block := &proto.Block{
 		Header: &proto.Header{
 			Version: 1,
 		},
 	}
+	tx := &proto.Transaction{
+		Version: 1,
+		Inputs:  []*proto.TxInput{},
+		Outputs: []*proto.TxOutput{
+			{
+				Amount: 1000,
+				Address: privKey.PublicKey().Address().Bytes(),
+			},
+		},
+	}
+	block.Transactions = append(block.Transactions, tx)
 	types.SignBlock(privKey, block)
 	return block
 }
 
 func (c *Chain) addBlock(b *proto.Block) error {
 	// add headers of block to list of headers
+	
 	c.headers.Add(b.Header)
+	for _, tx := range b.Transactions {
+		// fmt.Println("new tx: ", hex.EncodeToString(types.HashTransaction(tx)))
+		if err := c.txStore.Put(tx); err != nil {
+			return err
+		}
+	}
 
 	// validation for block
 	return c.blockStore.Put(b)

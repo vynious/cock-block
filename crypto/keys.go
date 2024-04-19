@@ -37,6 +37,26 @@ func GeneratePrivateKey() *PrivateKey {
 	}
 }
 
+func GenerateNewPrivateKeyFromSeedStr(seed string) *PrivateKey {
+	seedBytes, err := hex.DecodeString(seed)
+	if err != nil {
+		log.Panic(err)
+	}
+	return &PrivateKey{
+		key: ed25519.NewKeyFromSeed(seedBytes),
+	}
+}
+
+
+func GenerateNewPrivateKeyFromSeed(seed []byte) *PrivateKey {
+	if len(seed) != SeedLen {
+		log.Panic("invalid seed length must be 32")
+	}
+	return &PrivateKey{
+		key: ed25519.NewKeyFromSeed(seed),
+	}
+}
+
 func (p *PrivateKey) Bytes() []byte {
 	return p.key
 }

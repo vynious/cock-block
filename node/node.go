@@ -53,7 +53,7 @@ func (pool *Mempool) Clear() []*proto.Transaction {
 	pool.lock.Lock()
 	defer pool.lock.Unlock()
 
-	txx := make([]*proto.Transaction, len(pool.txx)) 
+	txx := make([]*proto.Transaction, len(pool.txx))
 	it := 0
 	for k, v := range pool.txx {
 		delete(pool.txx, k)

@@ -14,6 +14,8 @@ import (
 
 func main() {
 
+	
+
 	makeNode(":3000", []string{}, true)
 	time.Sleep(time.Second)
 	makeNode(":4000", []string{":3000"}, false)
@@ -28,7 +30,7 @@ func main() {
 
 func makeNode(listenAddr string, bootstrapNodes []string, isValidator bool) (*node.Node, error) {
 	cfg := node.ServerConfig{
-		Version: "cock-blocker-1",
+		Version:    "cock-blocker-1",
 		ListenAddr: listenAddr,
 	}
 	if isValidator {
