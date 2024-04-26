@@ -44,9 +44,20 @@ func (list *HeaderList) Len() int {
 	return len(list.headers)
 }
 
+type UTXO struct {
+	Hash     string
+	OutIndex int
+	Amount   int64
+	Spent    bool
+}
+
+// MemoryTxStore (structs) has TxStorer (interfaces), Chain (struct) embeds TxStorer (interface), I can use anything that implements TxStore (interface) to create my Chain (struct)
+
+// Chain stores the Txns, Block, Headers, UTXO
 type Chain struct {
 	txStore    TxStorer
 	blockStore BlockStorer
+	utxoStore  UTXOStorer
 	headers    *HeaderList
 }
 
@@ -62,6 +73,7 @@ func NewChain(bs BlockStorer, txStore TxStorer) *Chain {
 	chain := &Chain{
 		blockStore: bs,
 		txStore:    txStore,
+		utxoStore:  NewMemoryUTXOStore(),
 		headers:    NewHeaderList(),
 	}
 	chain.addBlock(createGenesisBlock())
@@ -126,6 +138,15 @@ func (c *Chain) ValidateBlock(b *proto.Block) error {
 	if !bytes.Equal(hash, b.Header.PrevHash) {
 		return fmt.Errorf("invalid previous block hash")
 	}
+	for _, tx := range b.Transactions {
+		if !types.VerifyTransaction(tx) {
+			return fmt.Errorf("invalid tx signature")
+		}
+
+		// for _, input := range tx.Inputs {
+		// 	input 
+		// }
+	}
 	return nil
 }
 
@@ -148,7 +169,7 @@ func createGenesisBlock() *proto.Block {
 		Inputs:  []*proto.TxInput{},
 		Outputs: []*proto.TxOutput{
 			{
-				Amount: 1000,
+				Amount:  1000,
 				Address: privKey.PublicKey().Address().Bytes(),
 			},
 		},
@@ -160,13 +181,28 @@ func createGenesisBlock() *proto.Block {
 
 func (c *Chain) addBlock(b *proto.Block) error {
 	// add headers of block to list of headers
-	
+
 	c.headers.Add(b.Header)
-	for _, tx := range b.Transactions {
+	for it, tx := range b.Transactions {
 		// fmt.Println("new tx: ", hex.EncodeToString(types.HashTransaction(tx)))
 		if err := c.txStore.Put(tx); err != nil {
 			return err
 		}
+		for _, output := range tx.Outputs {
+			hash := hex.EncodeToString(types.HashTransaction(tx))
+			utxo := &UTXO{
+				Hash:     hash,
+				Amount:   output.Amount,
+				OutIndex: it,
+				Spent:    false,
+			}
+			address := crypto.AddressFromBytes(output.Address)
+			key := fmt.Sprintf("%s_%s", address, hash)
+			if err := c.utxoStore.Put(key, utxo); err != nil {
+				return err
+			}
+		}
+		
 	}
 
 	// validation for block

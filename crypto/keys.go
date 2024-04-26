@@ -47,7 +47,6 @@ func GenerateNewPrivateKeyFromSeedStr(seed string) *PrivateKey {
 	}
 }
 
-
 func GenerateNewPrivateKeyFromSeed(seed []byte) *PrivateKey {
 	if len(seed) != SeedLen {
 		log.Panic("invalid seed length must be 32")
@@ -90,7 +89,6 @@ func PublicKeyFromBytes(b []byte) *PublicKey {
 	}
 }
 
-
 func (p *PublicKey) Bytes() []byte {
 	return p.key
 }
@@ -110,7 +108,7 @@ type Signature struct {
 }
 
 func SignatureFromBytes(b []byte) *Signature {
-if len(b) != SigLen {
+	if len(b) != SigLen {
 		log.Panic("length of the bytes not equals to 64")
 	}
 	return &Signature{
@@ -128,6 +126,15 @@ func (s *Signature) Verify(pubKey *PublicKey, msg []byte) bool {
 
 type Address struct {
 	value []byte
+}
+
+func AddressFromBytes(b []byte) Address {
+	if len(b) != AddressLen {
+		panic("length of the address not equals 20")
+	}
+	return Address{
+		value: b,
+	}
 }
 
 func (a *Address) Bytes() []byte {
